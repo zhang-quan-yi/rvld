@@ -1,9 +1,13 @@
 package linker
 
-import "unsafe"
+import (
+	"bytes"
+	"unsafe"
+)
 
 const ElfHeaderSize = int(unsafe.Sizeof(ElfHeader{}))
 const SectionHeaderSize = int(unsafe.Sizeof(SectionHeader{}))
+const SymbolSize = int(unsafe.Sizeof(Symbol{}))
 
 type ElfHeader struct {
 	Ident                       [16]uint8
@@ -33,4 +37,19 @@ type SectionHeader struct {
 	Info      uint32
 	AddrAlign uint64
 	EntrySize uint64
+}
+
+type Symbol struct {
+	Name               uint32
+	Info               uint8
+	Other              uint8
+	SectionHeaderIndex uint16
+	Value              uint64
+	Size               uint64
+}
+
+func ElfGetName(stringTable []byte, offset uint32) string {
+	// 在 string table 中找到字符串结束符 0
+	length := uint32(bytes.Index(stringTable[offset:], []byte{0}))
+	return string(stringTable[offset : offset+length])
 }
