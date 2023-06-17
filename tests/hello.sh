@@ -5,7 +5,7 @@ test_out=out/tests/$test_name
 
 mkdir -p "$test_out"
 
-cat << EOF | riscv64-linux-gnu-gcc -o "$test_out"/a.o -c -xc -
+cat << EOF | $CC -o "$test_out"/a.o -c -xc -
 #include <stdio.h>
 
 int main(void) {
@@ -14,4 +14,4 @@ int main(void) {
 }
 EOF
 
-./rvld "$test_out"/a.o
+$CC -B. -static "$test_out"/a.o -o "$test_out"/out
