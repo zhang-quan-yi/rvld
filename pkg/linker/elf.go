@@ -2,12 +2,16 @@ package linker
 
 import (
 	"bytes"
+	"learn/rvld/pkg/utils"
+	"strconv"
+	"strings"
 	"unsafe"
 )
 
 const ElfHeaderSize = int(unsafe.Sizeof(ElfHeader{}))
 const SectionHeaderSize = int(unsafe.Sizeof(SectionHeader{}))
 const SymbolSize = int(unsafe.Sizeof(Symbol{}))
+const ArchiveHeaderSize = int(unsafe.Sizeof(ArchiveHeader{}))
 
 type ElfHeader struct {
 	Ident                       [16]uint8
@@ -52,4 +56,47 @@ func ElfGetName(stringTable []byte, offset uint32) string {
 	// 在 string table 中找到字符串结束符 0
 	length := uint32(bytes.Index(stringTable[offset:], []byte{0}))
 	return string(stringTable[offset : offset+length])
+}
+
+type ArchiveHeader struct {
+	Name [16]byte
+	Date [12]byte
+	Uid  [6]byte
+	Gid  [6]byte
+	Mode [8]byte
+	Size [10]byte
+	Fmag [2]byte
+}
+
+func (a *ArchiveHeader) HasPrefix(s string) bool {
+	return strings.HasPrefix(string(a.Name[:]), s)
+}
+
+func (a *ArchiveHeader) IsStringTable() bool {
+	return a.HasPrefix("// ")
+}
+
+func (a *ArchiveHeader) IsSymbolTable() bool {
+	return a.HasPrefix("/ ") || a.HasPrefix("/SYM64/ ")
+}
+
+func (a *ArchiveHeader) GetSize() int {
+	size, err := strconv.Atoi(strings.TrimSpace(string(a.Size[:])))
+	utils.MustNo(err)
+	return size
+}
+
+func (a *ArchiveHeader) ReadName(stringTable []byte) string {
+	// long file name
+	if a.HasPrefix("/") {
+		start, err := strconv.Atoi(strings.TrimSpace(string(a.Name[1:])))
+		utils.MustNo(err)
+		end := start + bytes.Index(stringTable[start:], []byte("/\n"))
+		return string(stringTable[start:end])
+	}
+
+	// short file name
+	end := bytes.Index(a.Name[:], []byte("/"))
+	utils.Assert(end != -1)
+	return string(a.Name[:end])
 }

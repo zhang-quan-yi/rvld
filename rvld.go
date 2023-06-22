@@ -34,8 +34,11 @@ func main() {
 		utils.Fatal("Unknown emulation type")
 	}
 
-	fmt.Printf("%v\n", remaining)
-
+	linker.ReadInputFiles(ctx, remaining)
+	println(len(ctx.Objs))
+	for _, obj := range ctx.Objs {
+		println(obj.File.Name)
+	}
 }
 
 func parseArgs(ctx *linker.Context) []string {
@@ -101,8 +104,12 @@ func parseArgs(ctx *linker.Context) []string {
 				utils.Fatal(fmt.Sprintf("Unknown -m argument: %s", arg))
 			}
 		} else if readArg("L") {
+			// L 表示 library path
+			// 比如 . /usr/lib/gcc...
 			ctx.Args.LibraryPaths = append(ctx.Args.LibraryPaths, arg)
 		} else if readArg("l") {
+			// l 表示静态链接库文件
+			// 去 library path 里去找这些库文件
 			remaining = append(remaining, "-l"+arg)
 		} else if readArg("sysroot") || readFlag("static") || readArg("plugin") || readArg("plugin-opt") || readFlag("as-needed") || readFlag("start-group") || readFlag("end-group") || readArg("hash-style") || readArg("build-id") || readFlag("s") || readFlag("no-relax") {
 			// Ignored
