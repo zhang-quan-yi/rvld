@@ -2,6 +2,7 @@ package linker
 
 import (
 	"bytes"
+	"debug/elf"
 	"learn/rvld/pkg/utils"
 	"strconv"
 	"strings"
@@ -50,6 +51,16 @@ type Symbol struct {
 	SectionHeaderIndex uint16
 	Value              uint64
 	Size               uint64
+}
+
+func (s *Symbol) IsAbs() bool {
+	// Absolute values.
+	return s.SectionHeaderIndex == uint16(elf.SHN_ABS)
+}
+
+func (s *Symbol) IsUndef() bool {
+	// Undefined, missing, irrelevant.
+	return s.SectionHeaderIndex == uint16(elf.SHN_UNDEF)
 }
 
 func ElfGetName(stringTable []byte, offset uint32) string {

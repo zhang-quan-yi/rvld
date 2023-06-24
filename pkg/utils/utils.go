@@ -41,3 +41,15 @@ func RemovePrefix(s, prefix string) (string, bool) {
 	}
 	return s, false
 }
+
+func RemiveIf[T any](elems []T, condition func(T) bool) []T {
+	i := 0
+	for _, elem := range elems {
+		if condition(elem) {
+			continue
+		}
+		elems[i] = elem
+		i++
+	}
+	return elems[:i]
+}
