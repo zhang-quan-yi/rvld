@@ -73,13 +73,7 @@ func (f *InputFile) GetBytesFromIndex(index int64) []byte {
 
 func (f *InputFile) FillUpElfSymbols(sectionHeader *SectionHeader) {
 	bytesOfSectionContent := f.GetBytesFromSectionHeader(sectionHeader)
-	numbers := len(bytesOfSectionContent) / SymbolSize
-	f.ElfSymbols = make([]Symbol, 0, numbers)
-	for numbers > 0 {
-		f.ElfSymbols = append(f.ElfSymbols, utils.Read[Symbol](bytesOfSectionContent))
-		bytesOfSectionContent = bytesOfSectionContent[SymbolSize:]
-		numbers--
-	}
+	f.ElfSymbols = utils.ReadSlice[Symbol](bytesOfSectionContent, SymbolSize)
 }
 
 func (f *InputFile) FindSection(_type uint32) *SectionHeader {

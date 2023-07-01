@@ -1,6 +1,7 @@
 package linker
 
 import (
+	"bytes"
 	"debug/elf"
 	"learn/rvld/pkg/utils"
 )
@@ -12,6 +13,7 @@ type ObjectFile struct {
 	// 该 symbol 的 sectionHeaderIndex 需要去这里去拿
 	SymbolTableSectionIndexSection []uint32
 	Sections                       []*InputSection
+	MergeableSections              []*MergeableSection
 }
 
 func NewObjectFile(file *File, isAlive bool) *ObjectFile {
@@ -35,6 +37,7 @@ func (o *ObjectFile) Parse(ctx *Context) {
 
 	o.InitializeSections()
 	o.InitializeSymbols(ctx)
+	o.InitializeMergeableSections(ctx)
 }
 
 func (o *ObjectFile) InitializeSections() {
@@ -56,12 +59,7 @@ func (o *ObjectFile) InitializeSections() {
 
 func (o *ObjectFile) FillUpSymbolTableSectionHeaderIndexSection(sectionHeader *SectionHeader) {
 	bytes := o.GetBytesFromSectionHeader(sectionHeader)
-	nums := len(bytes) / 4
-	for nums > 0 {
-		o.SymbolTableSectionIndexSection = append(o.SymbolTableSectionIndexSection, utils.Read[uint32](bytes))
-		bytes = bytes[4:]
-		nums--
-	}
+	o.SymbolTableSectionIndexSection = utils.ReadSlice[uint32](bytes, 4)
 }
 
 func (o *ObjectFile) InitializeSymbols(ctx *Context) {
@@ -160,5 +158,99 @@ func (o *ObjectFile) ClearSymbols() {
 		if symbol.File == o {
 			symbol.Clear()
 		}
+	}
+}
+
+func (o *ObjectFile) InitializeMergeableSections(ctx *Context) {
+	o.MergeableSections = make([]*MergeableSection, len(o.Sections))
+	for i := 0; i < len(o.Sections); i++ {
+		inputSection := o.Sections[i]
+		if inputSection != nil && inputSection.IsAlive && inputSection.SectionHeader().Flags&uint64(elf.SHF_MERGE) != 0 {
+			o.MergeableSections[i] = splitSection(ctx, inputSection)
+			inputSection.IsAlive = false
+		}
+	}
+}
+
+func splitSection(ctx *Context, inputSection *InputSection) *MergeableSection {
+	m := &MergeableSection{}
+	sectionHeader := inputSection.SectionHeader()
+	m.Parent = GetMergedSectionInstance(ctx, inputSection.Name(), sectionHeader.Type, sectionHeader.Flags)
+	m.P2Align = inputSection.P2Align
+
+	data := inputSection.Contents
+	offset := uint64(0)
+	if sectionHeader.Flags&uint64(elf.SHF_STRINGS) != 0 {
+		for len(data) > 0 {
+			end := findNull(data, int(sectionHeader.EntrySize))
+			if end == -1 {
+				utils.Fatal("String is not null terminated!")
+			}
+
+			sz := uint64(end) + sectionHeader.EntrySize
+			subString := data[:sz]
+			data = data[sz:]
+			m.Strs = append(m.Strs, string(subString))
+			m.FragOffsets = append(m.FragOffsets, uint32(offset))
+			offset += sz
+		}
+	} else {
+		if uint64(len(data))%sectionHeader.EntrySize != 0 {
+			utils.Fatal("Section size is not multiple of entry size")
+		}
+		for len(data) > 0 {
+			subString := data[:sectionHeader.EntrySize]
+			data = data[sectionHeader.EntrySize:]
+			m.Strs = append(m.Strs, string(subString))
+			m.FragOffsets = append(m.FragOffsets, uint32(offset))
+			offset += sectionHeader.EntrySize
+		}
+	}
+	return m
+}
+
+func findNull(data []byte, entrySize int) int {
+	if entrySize == 1 {
+		return bytes.Index(data, []byte{0})
+	}
+	for i := 0; i <= len(data)-entrySize; i += entrySize {
+		bs := data[i : i+entrySize]
+		if utils.AllZeros(bs) {
+			return i
+		}
+	}
+	return -1
+}
+
+func (o *ObjectFile) RegisterSectionPieces() {
+	for _, m := range o.MergeableSections {
+		if m == nil {
+			continue
+		}
+		m.Fragments = make([]*SectionFragment, 0, len(m.Strs))
+		for i := 0; i < len(m.Strs); i++ {
+			m.Fragments = append(m.Fragments, m.Parent.Insert(m.Strs[i], uint32(m.P2Align)))
+		}
+	}
+
+	for i := 1; i < len(o.ElfSymbols); i++ {
+		symbol := o.Symbols[i]
+		elfSymbol := &o.ElfSymbols[i]
+
+		if elfSymbol.IsAbs() || elfSymbol.IsUndef() || elfSymbol.IsCommon() {
+			continue
+		}
+
+		m := o.MergeableSections[o.GetSectionHeaderIndex(elfSymbol, i)]
+		if m == nil {
+			continue
+		}
+
+		frag, fragOffset := m.GetFragment(uint32(elfSymbol.Value))
+		if frag == nil {
+			utils.Fatal("Bad symbol value!")
+		}
+		symbol.SetSectionFragment(frag)
+		symbol.Value = uint64(fragOffset)
 	}
 }

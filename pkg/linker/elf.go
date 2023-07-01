@@ -63,6 +63,10 @@ func (s *Symbol) IsUndef() bool {
 	return s.SectionHeaderIndex == uint16(elf.SHN_UNDEF)
 }
 
+func (s *Symbol) IsCommon() bool {
+	return s.SectionHeaderIndex == uint16(elf.SHN_COMMON)
+}
+
 func ElfGetName(stringTable []byte, offset uint32) string {
 	// 在 string table 中找到字符串结束符 0
 	length := uint32(bytes.Index(stringTable[offset:], []byte{0}))

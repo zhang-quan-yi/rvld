@@ -10,6 +10,7 @@ type Context struct {
 	Args           ContextArgs
 	Objs           []*ObjectFile
 	InputSymbolMap map[string]*InputSymbol
+	MergedSections []*MergedSection
 }
 
 func NewContext() *Context {

@@ -5,6 +5,7 @@ import (
 	"learn/rvld/pkg/linker"
 	"learn/rvld/pkg/utils"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -36,6 +37,7 @@ func main() {
 
 	linker.ReadInputFiles(ctx, remaining)
 	linker.ResolveSymbols(ctx)
+	linker.RegisterSectionPieces(ctx)
 
 	for _, o := range ctx.Objs {
 		if o.File.Name == "out/tests/hello/a.o" {
@@ -126,5 +128,10 @@ func parseArgs(ctx *linker.Context) []string {
 			args = args[1:]
 		}
 	}
+
+	for i, path := range ctx.Args.LibraryPaths {
+		ctx.Args.LibraryPaths[i] = filepath.Clean(path)
+	}
+
 	return remaining
 }

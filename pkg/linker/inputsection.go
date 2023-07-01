@@ -1,22 +1,40 @@
 package linker
 
-import "learn/rvld/pkg/utils"
+import (
+	"debug/elf"
+	"learn/rvld/pkg/utils"
+	"math/bits"
+)
 
 type InputSection struct {
 	File               *ObjectFile
 	Contents           []byte
 	SectionHeaderIndex uint32
+	SectionSize        uint32
+	IsAlive            bool
+	P2Align            uint8
 }
 
 func NewInputSection(file *ObjectFile, sectinHeaderIndex uint32) *InputSection {
 	s := &InputSection{
 		File:               file,
 		SectionHeaderIndex: sectinHeaderIndex,
+		IsAlive:            true,
 	}
 
 	sectionHeader := s.SectionHeader()
 	s.Contents = file.File.Contents[sectionHeader.Offset : sectionHeader.Offset+sectionHeader.Size]
 
+	utils.Assert(sectionHeader.Flags&uint64(elf.SHF_COMPRESSED) == 0)
+	s.SectionSize = uint32(sectionHeader.Size)
+
+	toP2Align := func(align uint64) uint8 {
+		if align == 0 {
+			return 0
+		}
+		return uint8(bits.TrailingZeros64(align))
+	}
+	s.P2Align = toP2Align(sectionHeader.AddrAlign)
 	return s
 }
 
