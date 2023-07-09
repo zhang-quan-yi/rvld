@@ -11,6 +11,7 @@ import (
 
 const ElfHeaderSize = int(unsafe.Sizeof(ElfHeader{}))
 const SectionHeaderSize = int(unsafe.Sizeof(SectionHeader{}))
+const ProgramHaederSize = int(unsafe.Sizeof(ProgramHeader{}))
 const SymbolSize = int(unsafe.Sizeof(Symbol{}))
 const ArchiveHeaderSize = int(unsafe.Sizeof(ArchiveHeader{}))
 
@@ -42,6 +43,18 @@ type SectionHeader struct {
 	Info      uint32
 	AddrAlign uint64
 	EntrySize uint64
+}
+
+// describe segment.
+type ProgramHeader struct {
+	Type     uint32
+	Flags    uint32
+	Offset   uint64
+	VAddr    uint64 // virtual address
+	PAddr    uint64 // physical address
+	FileSize uint64 // size on file
+	MemSize  uint64 // size im memory
+	Align    uint64
 }
 
 type Symbol struct {

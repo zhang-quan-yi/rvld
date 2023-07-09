@@ -135,7 +135,7 @@ func (o *ObjectFile) GetSectionHeaderIndex(elfSymbol *Symbol, index int) int64 {
 	return int64(elfSymbol.SectionHeaderIndex)
 }
 
-func (o *ObjectFile) MarkLiveObjects(ctx *Context, feeder func(*ObjectFile)) {
+func (o *ObjectFile) MarkLiveObjects(feeder func(*ObjectFile)) {
 	utils.Assert(o.IsAlive)
 
 	for i := o.FirstGlobal; i < len(o.ElfSymbols); i++ {

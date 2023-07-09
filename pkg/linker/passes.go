@@ -2,6 +2,19 @@ package linker
 
 import "learn/rvld/pkg/utils"
 
+func CreateInternalFile(ctx *Context) {
+	obj := &ObjectFile{}
+	ctx.InternalObj = obj
+	ctx.Objs = append(ctx.Objs, obj)
+
+	ctx.InternalElfSymbols = make([]Symbol, 1)
+	obj.Symbols = append(obj.Symbols, NewInputSymbol(""))
+	obj.FirstGlobal = 1
+	obj.IsAlive = true
+
+	obj.ElfSymbols = ctx.InternalElfSymbols
+}
+
 func ResolveSymbols(ctx *Context) {
 	for _, file := range ctx.Objs {
 		file.ResolveSymbols()
@@ -35,7 +48,7 @@ func MarkLiveObjects(ctx *Context) {
 		if !file.IsAlive {
 			continue
 		}
-		file.MarkLiveObjects(ctx, func(file *ObjectFile) {
+		file.MarkLiveObjects(func(file *ObjectFile) {
 			roots = append(roots, file)
 		})
 
@@ -47,4 +60,20 @@ func RegisterSectionPieces(ctx *Context) {
 	for _, file := range ctx.Objs {
 		file.RegisterSectionPieces()
 	}
+}
+
+func CreateSyntheticSections(ctx *Context) {
+	ctx.OutputElfHeader = NewOutputElfHeader()
+	ctx.Chunks = append(ctx.Chunks, ctx.OutputElfHeader)
+}
+
+func GetFileSize(ctx *Context) uint64 {
+	fileOffset := uint64(0)
+
+	for _, chunk := range ctx.Chunks {
+		fileOffset = utils.AlignTo(fileOffset, chunk.GetSectionHeader().AddrAlign)
+		fileOffset += chunk.GetSectionHeader().Size
+	}
+
+	return fileOffset
 }
