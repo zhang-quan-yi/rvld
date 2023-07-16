@@ -13,9 +13,12 @@ type InputSection struct {
 	SectionSize        uint32
 	IsAlive            bool
 	P2Align            uint8
+
+	Offset        uint32
+	OutputSection *OutputSection
 }
 
-func NewInputSection(file *ObjectFile, sectinHeaderIndex uint32) *InputSection {
+func NewInputSection(ctx *Context, name string, file *ObjectFile, sectinHeaderIndex uint32) *InputSection {
 	s := &InputSection{
 		File:               file,
 		SectionHeaderIndex: sectinHeaderIndex,
@@ -35,6 +38,8 @@ func NewInputSection(file *ObjectFile, sectinHeaderIndex uint32) *InputSection {
 		return uint8(bits.TrailingZeros64(align))
 	}
 	s.P2Align = toP2Align(sectionHeader.AddrAlign)
+
+	s.OutputSection = GetOutputSection(ctx, name, uint64(sectionHeader.Type), sectionHeader.Flags)
 	return s
 }
 
@@ -45,4 +50,15 @@ func (i *InputSection) SectionHeader() *SectionHeader {
 
 func (i *InputSection) Name() string {
 	return ElfGetName(i.File.SectionHeaderNameStringTable, i.SectionHeader().Name)
+}
+
+func (i *InputSection) WriteTo(buf []byte) {
+	if i.SectionHeader().Type == uint32(elf.SHT_NOBITS) || i.SectionSize == 0 {
+		return
+	}
+	i.CopyContents(buf)
+}
+
+func (i *InputSection) CopyContents(buf []byte) {
+	copy(buf, i.Contents)
 }

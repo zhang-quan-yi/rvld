@@ -23,7 +23,7 @@ func NewOutputElfHeader() *OutputElfHeader {
 	}
 }
 
-func (o *OutputElfHeader) CopyBuf(ctx *Context) {
+func (o *OutputElfHeader) CopyBuffer(ctx *Context) {
 	elfHeader := &ElfHeader{}
 	WriteMagic(elfHeader.Ident[:])
 	elfHeader.Ident[elf.EI_CLASS] = uint8(elf.ELFCLASS64)

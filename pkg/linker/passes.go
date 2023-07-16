@@ -1,6 +1,9 @@
 package linker
 
-import "learn/rvld/pkg/utils"
+import (
+	"learn/rvld/pkg/utils"
+	"math"
+)
 
 func CreateInternalFile(ctx *Context) {
 	obj := &ObjectFile{}
@@ -63,17 +66,67 @@ func RegisterSectionPieces(ctx *Context) {
 }
 
 func CreateSyntheticSections(ctx *Context) {
-	ctx.OutputElfHeader = NewOutputElfHeader()
-	ctx.Chunks = append(ctx.Chunks, ctx.OutputElfHeader)
+	push := func(chunk Chunker) Chunker {
+		ctx.Chunks = append(ctx.Chunks, chunk)
+		return chunk
+	}
+
+	ctx.OutputElfHeader = push(NewOutputElfHeader()).(*OutputElfHeader)
+	ctx.SectionHeader = push(NewOutputSectionHeader()).(*OutputSectionHeader)
 }
 
-func GetFileSize(ctx *Context) uint64 {
+func SetOutputSectionOffsets(ctx *Context) uint64 {
 	fileOffset := uint64(0)
 
 	for _, chunk := range ctx.Chunks {
 		fileOffset = utils.AlignTo(fileOffset, chunk.GetSectionHeader().AddrAlign)
+		chunk.GetSectionHeader().Offset = fileOffset
 		fileOffset += chunk.GetSectionHeader().Size
 	}
 
 	return fileOffset
+}
+
+func BinSections(ctx *Context) {
+	group := make([][]*InputSection, len(ctx.OutputSections))
+	for _, file := range ctx.Objs {
+		for _, inputsection := range file.Sections {
+			if inputsection == nil || !inputsection.IsAlive {
+				continue
+			}
+
+			index := inputsection.OutputSection.Index
+			group[index] = append(group[index], inputsection)
+		}
+	}
+	for index, outputsection := range ctx.OutputSections {
+		outputsection.Members = group[index]
+	}
+}
+
+func CollectOutputSections(ctx *Context) []Chunker {
+	outputsections := make([]Chunker, 0)
+	for _, outputsection := range ctx.OutputSections {
+		if len(outputsection.Members) > 0 {
+			outputsections = append(outputsections, outputsection)
+		}
+	}
+	return outputsections
+}
+
+func ComputeSectionSizes(ctx *Context) {
+	for _, outputsection := range ctx.OutputSections {
+		offset := uint64(0)
+		p2align := int64(0)
+
+		for _, inputsection := range outputsection.Members {
+			offset = utils.AlignTo(offset, 1<<inputsection.P2Align)
+			inputsection.Offset = uint32(offset)
+			offset += uint64(inputsection.SectionSize)
+			p2align = int64(math.Max(float64(p2align), float64(inputsection.P2Align)))
+		}
+
+		outputsection.SectionHeader.Size = offset
+		outputsection.SectionHeader.AddrAlign = 1 << p2align
+	}
 }

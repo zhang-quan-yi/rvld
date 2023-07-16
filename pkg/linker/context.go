@@ -11,7 +11,11 @@ type Context struct {
 	Buf  []byte
 
 	OutputElfHeader *OutputElfHeader
-	Chunks          []Chunker
+	SectionHeader   *OutputSectionHeader
+
+	OutputSections []*OutputSection
+
+	Chunks []Chunker
 
 	Objs               []*ObjectFile
 	InputSymbolMap     map[string]*InputSymbol

@@ -35,12 +35,12 @@ func (o *ObjectFile) Parse(ctx *Context) {
 		o.SymbolStringTable = o.GetBytesFromIndex(int64(o.SymbolTableSection.Link))
 	}
 
-	o.InitializeSections()
+	o.InitializeSections(ctx)
 	o.InitializeSymbols(ctx)
 	o.InitializeMergeableSections(ctx)
 }
 
-func (o *ObjectFile) InitializeSections() {
+func (o *ObjectFile) InitializeSections(ctx *Context) {
 	o.Sections = make([]*InputSection, len(o.ElfSections))
 	for i := 0; i < len(o.ElfSections); i++ {
 		sectionHeader := &o.ElfSections[i]
@@ -52,7 +52,8 @@ func (o *ObjectFile) InitializeSections() {
 			o.FillUpSymbolTableSectionHeaderIndexSection(sectionHeader)
 		default:
 			// 普通 section
-			o.Sections[i] = NewInputSection(o, uint32(i))
+			name := ElfGetName(o.InputFile.SectionHeaderNameStringTable, sectionHeader.Name)
+			o.Sections[i] = NewInputSection(ctx, name, o, uint32(i))
 		}
 	}
 }
