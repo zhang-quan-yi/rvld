@@ -85,3 +85,7 @@ func (f *InputFile) FindSection(_type uint32) *SectionHeader {
 	}
 	return nil
 }
+
+func (f *InputFile) GetElfHeader() ElfHeader {
+	return utils.Read[ElfHeader](f.File.Contents)
+}

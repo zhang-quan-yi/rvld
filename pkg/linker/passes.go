@@ -1,8 +1,10 @@
 package linker
 
 import (
+	"debug/elf"
 	"learn/rvld/pkg/utils"
 	"math"
+	"sort"
 )
 
 func CreateInternalFile(ctx *Context) {
@@ -76,12 +78,40 @@ func CreateSyntheticSections(ctx *Context) {
 }
 
 func SetOutputSectionOffsets(ctx *Context) uint64 {
-	fileOffset := uint64(0)
-
+	addr := IMAGE_BASE
 	for _, chunk := range ctx.Chunks {
-		fileOffset = utils.AlignTo(fileOffset, chunk.GetSectionHeader().AddrAlign)
-		chunk.GetSectionHeader().Offset = fileOffset
-		fileOffset += chunk.GetSectionHeader().Size
+		if chunk.GetSectionHeader().Flags&uint64(elf.SHF_ALLOC) == 0 {
+			continue
+		}
+
+		addr = utils.AlignTo(addr, chunk.GetSectionHeader().AddrAlign)
+		chunk.GetSectionHeader().Addr = addr
+
+		if !isTbss(chunk) {
+			addr += chunk.GetSectionHeader().Size
+		}
+	}
+
+	i := 0
+	first := ctx.Chunks[0]
+	for {
+		sectionheader := ctx.Chunks[i].GetSectionHeader()
+		sectionheader.Offset = sectionheader.Addr - first.GetSectionHeader().Addr
+		i++
+
+		if i >= len(ctx.Chunks) || ctx.Chunks[i].GetSectionHeader().Flags&uint64(elf.SHF_ALLOC) == 0 {
+			break
+		}
+	}
+
+	lastSectionHeader := ctx.Chunks[i-1].GetSectionHeader()
+	fileOffset := lastSectionHeader.Offset + lastSectionHeader.Size
+
+	for ; i < len(ctx.Chunks); i++ {
+		sectionheader := ctx.Chunks[i].GetSectionHeader()
+		fileOffset = utils.AlignTo(fileOffset, sectionheader.AddrAlign)
+		sectionheader.Offset = fileOffset
+		fileOffset += sectionheader.Size
 	}
 
 	return fileOffset
@@ -129,4 +159,48 @@ func ComputeSectionSizes(ctx *Context) {
 		outputsection.SectionHeader.Size = offset
 		outputsection.SectionHeader.AddrAlign = 1 << p2align
 	}
+}
+
+func SortOutputSections(ctx *Context) {
+	rank := func(chunk Chunker) int32 {
+		typ := chunk.GetSectionHeader().Type
+		flags := chunk.GetSectionHeader().Flags
+
+		if flags&uint64(elf.SHF_ALLOC) == 0 {
+			return math.MaxInt32 - 1
+		}
+		if chunk == ctx.SectionHeader {
+			return math.MaxInt32
+		}
+		if chunk == ctx.OutputElfHeader {
+			return 0
+		}
+		if typ == uint32(elf.SHT_NOTE) {
+			return 2
+		}
+
+		b2i := func(b bool) int {
+			if b {
+				return 1
+			}
+			return 0
+		}
+
+		writeable := b2i(flags&uint64(elf.SHF_WRITE) != 0)
+		notExec := b2i(flags&uint64(elf.SHF_EXECINSTR) == 0)
+		notTls := b2i(flags&uint64(elf.SHF_TLS) == 0)
+		isBss := b2i(typ == uint32(elf.SHT_NOBITS))
+
+		return int32(writeable<<7 | notExec<<6 | notTls<<5 | isBss<<4)
+	}
+
+	sort.SliceStable(ctx.Chunks, func(i, j int) bool {
+		return rank(ctx.Chunks[i]) < rank(ctx.Chunks[j])
+	})
+}
+
+func isTbss(chunk Chunker) bool {
+	sectionheader := chunk.GetSectionHeader()
+	return sectionheader.Type == uint32(elf.SHT_NOBITS) &&
+		sectionheader.Flags&uint64(elf.SHF_TLS) != 0
 }

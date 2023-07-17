@@ -9,6 +9,9 @@ import (
 	"unsafe"
 )
 
+const IMAGE_BASE uint64 = 0x200000
+const EF_RISCV_RVC uint32 = 1
+
 const ElfHeaderSize = int(unsafe.Sizeof(ElfHeader{}))
 const SectionHeaderSize = int(unsafe.Sizeof(SectionHeader{}))
 const ProgramHaederSize = int(unsafe.Sizeof(ProgramHeader{}))

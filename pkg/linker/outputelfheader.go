@@ -23,6 +23,31 @@ func NewOutputElfHeader() *OutputElfHeader {
 	}
 }
 
+func getEntryAddr(ctx *Context) uint64 {
+	for _, outputsection := range ctx.OutputSections {
+		if outputsection.Name == ".text" {
+			return outputsection.SectionHeader.Addr
+		}
+	}
+	return 0
+}
+
+func getFlags(ctx *Context) uint32 {
+	utils.Assert(len(ctx.Objs) > 0)
+	flags := ctx.Objs[0].GetElfHeader().Flags
+	for _, obj := range ctx.Objs[1:] {
+		if obj == ctx.InternalObj {
+			continue
+		}
+
+		if obj.GetElfHeader().Flags&EF_RISCV_RVC != 0 {
+			flags |= EF_RISCV_RVC
+			break
+		}
+	}
+	return flags
+}
+
 func (o *OutputElfHeader) CopyBuffer(ctx *Context) {
 	elfHeader := &ElfHeader{}
 	WriteMagic(elfHeader.Ident[:])
@@ -34,12 +59,15 @@ func (o *OutputElfHeader) CopyBuffer(ctx *Context) {
 	elfHeader.Type = uint16(elf.ET_EXEC)
 	elfHeader.Machine = uint16(elf.EM_RISCV)
 	elfHeader.Version = uint32(elf.EV_CURRENT)
-	// TODO: Entry
+	elfHeader.Entry = getEntryAddr(ctx)
+	// TODO
+	elfHeader.SectionHeaderOffset = ctx.SectionHeader.SectionHeader.Offset
+	elfHeader.Flags = getFlags(ctx)
 	elfHeader.ElfHeaderSize = uint16(ElfHeaderSize)
 	elfHeader.ProgramHeaderEntrySize = uint16(ProgramHaederSize)
-	// TODO: ProgramHeaderNumber
+	// TODO
 	elfHeader.SectionHeaderEntrySize = uint16(SectionHeaderSize)
-	// TODO: SectionHeaderNumber
+	elfHeader.SectionHeaderNumber = uint16(ctx.SectionHeader.SectionHeader.Size) / uint16(SectionHeaderSize)
 
 	buf := &bytes.Buffer{}
 	err := binary.Write(buf, binary.LittleEndian, elfHeader)
